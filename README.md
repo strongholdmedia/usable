@@ -1,4 +1,4 @@
-# usable.js v0.1.0
+# usable.js v0.1.1
 
 ## Making the Web / DOM usable
 

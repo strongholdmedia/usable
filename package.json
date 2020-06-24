@@ -1,6 +1,6 @@
 {
     "name": "@dorgaren/usable",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "description": "Make the Web / DOM usable!",
     "bugs" : {
         "url": "https://github.com/strongholdmedia/usable/issues"

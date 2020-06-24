@@ -1,5 +1,5 @@
 /**
- * Usable.js, version 0.1.0
+ * Usable.js, version 0.1.1
  *
  * Copyright (c) 2020, Victor Csiky, Stronghold-Terra Nonprofit llc
  * All rights reserved.
@@ -7,9 +7,21 @@
  * See LICENSE (BSD 3-clause) for details.
  */
 const Usable = {
-    install: function install(globalObject)
+    install: function install(globalObject, options)
     {
         globalObject = globalObject || window || global;
+        options = options || {};
+
+        let enableDebugging = typeof options.enableDebugging === "boolean" && options.enableDebugging,
+            attemptRemoveInvalid = typeof options.attemptRemoveInvalid === "boolean" && options.attemptRemoveInvalid;
+
+        function debug(message)
+        {
+            if (enableDebugging && globalObject.console && globalObject.console.warn)
+            {
+                globalObject.console.warn(message);
+            }
+        }
 
         // this shim is based on Polymer Project's work; thanks!
         if (typeof WeakMap === "undefined")
@@ -102,6 +114,7 @@ const Usable = {
         {
             if (typeof eventNameCache[key] === "undefined")
             {
+                // this is a real error, should always be reported
                 throw new ReferenceError("Key not found in event name cache");
             }
 
@@ -125,30 +138,40 @@ const Usable = {
 
             if (typeof targetQueue !== "object")
             {
-                throw new ReferenceError("No event handlers registered on this target");
+                debug("No event handlers registered on this target");
             }
-
-            let keys = Object.keys(targetQueue);
-
-            for (let idx = 0; idx < keys.length; idx++)
+            else
             {
-                if (eventNameCache[keys[idx]] === name)
+                let keys = Object.keys(targetQueue);
+
+                for (let idx = 0; idx < keys.length; idx++)
                 {
-                    let candidate = targetQueue[keys[idx]];
-                    if (candidate.handler === handler && candidate.options === options)
+                    if (eventNameCache[keys[idx]] === name)
                     {
-                        match = keys[idx];
-                        break;
+                        let candidate = targetQueue[keys[idx]];
+                        if (candidate.handler === handler && candidate.options === options)
+                        {
+                            match = keys[idx];
+                            break;
+                        }
                     }
                 }
             }
 
             if (match === null)
             {
-                throw new Error("Cannot remove event handler - no match found");
-            }
+                debug("Cannot remove event handler - no match found");
 
-            this.removeEventHandler(match);
+                if (attemptRemoveInvalid)
+                {
+                    debug("Attempting to remove event listener not accounted for");
+                    oldEventTargetRemoveEventListener.call(this, name, handler, options);
+                }
+            }
+            else
+            {
+                this.removeEventHandler(match);
+            }
         };
 
         globalObject.EventTarget.prototype.hasEventListener = function hasEventListener(name, handler, options)
