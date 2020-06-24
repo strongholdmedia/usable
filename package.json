@@ -1,0 +1,27 @@
+{
+    "name": "@dorgaren/usable",
+    "version": "0.1.0",
+    "description": "Make the Web / DOM usable!",
+    "bugs" : {
+        "url": "https://github.com/strongholdmedia/usable/issues"
+    },
+    "license": "BSD-3-Clause",
+    "main": "src/usable.js",
+    "keywords": [
+        "event",
+        "dom",
+        "javascript",
+        "ecmascript",
+        "EventTarget",
+        "shim",
+        "getEventListeners",
+        "util",
+        "functional",
+        "server",
+        "client",
+        "browser"
+    ],
+    "author": "Viktor Csiki <labs@strongholdmedia.eu>",
+    "contributors": [],
+    "dependencies": {}
+}
