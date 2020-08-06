@@ -1,4 +1,4 @@
-# usable.js v0.1.1
+# usable.js v0.2.0
 
 ## Making the Web / DOM usable
 
@@ -31,6 +31,18 @@ or
 
 explicitly.
 
+**Note**: given the lack of native DOM support in Node, if you wish to use new
+DOM features, please use JSDOM as follows:
+
+```
+let jsDOM = require("js-dom");
+require("@dorgaren/usable").install(global, { dom: jsDOM.window });
+```
+
+You should have similar success using an alternate DOM (like `ShadowRoot`, or even `JSDOM`) in a browser.
+
+Please report any implementation / combination that does not work whilst you believe it should.
+
 **Not using Webpack/NPM?**
 
 In this case, I recommend that you use require.js.
@@ -53,6 +65,7 @@ switch to using a bundler.
 ### Current aims
 
 * An `EventTarget` that is actually _reasonable_ in functionality
+* `DocumentFragment` enhancements
 * Dynamic `HTMLCollection` and `NodeList`
 * ... (more to come)
 
@@ -113,3 +126,7 @@ Then again, to use such functionality, one _needs_ ES5 syntax, that is, use obje
 _In my opinion (yes, this is personal)_, ES module syntax looks very odd with prototype mangling.
 
 Also, backwards compatibility is an internal requirement.
+
+**4. Node.js? There is not even native DOM support..**
+
+I suggest that you use JSDOM, as written in the example above.

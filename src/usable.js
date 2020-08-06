@@ -1,5 +1,5 @@
 /**
- * Usable.js, version 0.1.1
+ * Usable.js, version 0.2.0
  *
  * Copyright (c) 2020, Victor Csiky, Stronghold-Terra Nonprofit llc
  * All rights reserved.
@@ -9,11 +9,13 @@
 const Usable = {
     install: function install(globalObject, options)
     {
-        globalObject = globalObject || window || global;
+        globalObject = globalObject || window || global || {};
         options = options || {};
 
         let enableDebugging = typeof options.enableDebugging === "boolean" && options.enableDebugging,
-            attemptRemoveInvalid = typeof options.attemptRemoveInvalid === "boolean" && options.attemptRemoveInvalid;
+            attemptRemoveInvalid = typeof options.attemptRemoveInvalid === "boolean" && options.attemptRemoveInvalid,
+            domObject = typeof options.dom === "object" && options.dom || globalObject,
+            domDocument = typeof globalObject.document === "object" && globalObject.document || null;
 
         function debug(message)
         {
@@ -79,8 +81,18 @@ const Usable = {
             eventNameCache = {},
             oldEventTargetAddEventListener = globalObject.EventTarget.prototype.addEventListener,
             oldEventTargetRemoveEventListener = globalObject.EventTarget.prototype.removeEventListener,
+            oldHTMLElementFocus = null,
             oldNodeAppendChild = null,
-            oldParentNodeAppend = null;
+            oldDocumentAppend = null,
+            oldDocumentFragmentAppend = null,
+            oldElementAppend = null,
+            hasDOMSupport = domObject !== null
+                && typeof domObject.Element === "function"
+                && typeof domObject.Document === "function"
+                && typeof domObject.DocumentFragment === "function"
+                && typeof domObject.Node === "function"
+                && typeof domObject.NodeFilter === "function"
+                && typeof domObject.HTMLElement === "function";
 
         globalObject.EventTarget.prototype.addEventHandler = function addEventHandler(name, handler, options)
         {
@@ -237,19 +249,21 @@ const Usable = {
             return retVal;
         };
 
-        //
-        if (typeof globalObject.DocumentFragment === "function")
+        if (hasDOMSupport) // make perhaps conditional
         {
-            oldNodeAppendChild = globalObject.Node.prototype.appendChild;
-            oldParentNodeAppend = typeof globalObject.ParentNode === "function"
-                ? globalObject.ParentNode.prototype.append
-                : null;
+            oldNodeAppendChild = domObject.Node.prototype.appendChild;
+            oldDocumentAppend = domObject.Document.prototype.append;
+            oldDocumentFragmentAppend = domObject.Document.prototype.append;
+            oldElementAppend = domObject.Element.prototype.append;
+            oldHTMLElementFocus = domObject.HTMLElement.prototype.focus;
+
+            let focusableTags = ["A", "BUTTON", "INPUT", "SELECT", "TEXTAREA" ];
 
             globalObject.EventTarget.prototype.migrateEventHandlersTo = function migrateEventHandlersTo(newTarget, detachCurrent)
             {
                 let retVal = false;
 
-                if (! newTarget instanceof EventTarget)
+                if (! newTarget instanceof globalObject.EventTarget)
                 {
                     throw new TypeError("'newTarget' must be an EventTarget instance");
                 }
@@ -284,39 +298,105 @@ const Usable = {
                 return retVal;
             };
 
-            globalObject.Node.prototype.appendChild = function appendChild(child)
+            let getFocusedElement = function getFocusedElement(parentNode)
             {
-                let retVal = oldNodeAppendChild.call(this, child);
+                let retVal = null;
 
-                if (child instanceof DocumentFragment)
+                if (parentNode.children.length > 0)
                 {
-                    child.migrateEventHandlersTo(this);
+                    for (let childIdx = 0; childIdx < parentNode.children.length; childIdx++)
+                    {
+                        let treeWalker = document.createTreeWalker(
+                            parentNode.children.item(childIdx),
+                            NodeFilter.SHOW_ELEMENT
+                        );
+
+                        do
+                        {
+                            let node = treeWalker.currentNode;
+
+                            if (typeof node.autofocus === "boolean"
+                                && node.autofocus
+                                && focusableTags.indexOf(node.tagName) !== -1
+                            )
+                            {
+                                retVal = node;
+                            }
+                        }
+                        while (treeWalker.nextNode() !== null);
+                    }
                 }
 
                 return retVal;
             };
 
-            if (oldParentNodeAppend !== null)
+            domObject.Node.prototype.appendChild = function appendChild(child)
             {
-                globalObject.ParentNode.prototype.append = function append()
+                let isFragment = child instanceof domObject.DocumentFragment,
+                    focusedElement = isFragment
+                        ? getFocusedElement(child)
+                        : null;
+
+                let retVal = oldNodeAppendChild.call(this, child);
+
+                if (isFragment) { child.migrateEventHandlersTo(this); }
+
+                if (focusedElement !== null) { focusedElement.focus(); }
+
+                return retVal;
+            };
+
+            let newAppend = function append()
+            {
+                let sourceArgs = Array.from(arguments),
+                    args = sourceArgs.slice(1),
+                    eventHandlerSources = [];
+
+                for (let idx = 0; idx < args.length; idx++)
                 {
-                    let args = Array.from(arguments),
-                        eventHandlerSources = [];
+                    let isFragment = args[idx] instanceof domObject.DocumentFragment,
+                        focusedElement = isFragment
+                            ? getFocusedElement(args[idx])
+                            : null;
 
-                    for (let idx = 0; idx < args.length; idx++)
-                    {
-                        // perhaps passing the whole argument set is faster,
-                        // but unsure if any current or future events will not
-                        // interfere with event handler order
-                        oldParentNodeAppend.call(this, args[idx]);
+                    // perhaps passing the whole argument set is faster,
+                    // but unsure if any current or future events will not
+                    // interfere with event handler order
+                    sourceArgs[0].call(this, args[idx]);
 
-                        if (args[idx] instanceof DocumentFragment)
-                        {
-                            args[idx].migrateEventHandlersTo(this);
-                        }
-                    }
+                    if (isFragment) { args[idx].migrateEventHandlersTo(this); }
+
+                    if (focusedElement !== null) { focusedElement.focus(); }
                 }
-            }
+            };
+
+            // sadly, I found no more elegant but equally fast outcome
+            globalObject.Document.prototype.append = function documentAppend()
+            {
+                newAppend.apply(this, [ oldDocumentAppend ].append(Array.from(arguments)));
+            };
+
+            globalObject.DocumentFragment.prototype.append = function documentFragmentAppend()
+            {
+                newAppend.apply(this, [ oldDocumentFragmentAppend ].append(Array.from(arguments)));
+            };
+
+            globalObject.Element.prototype.append = function elementAppend()
+            {
+                newAppend.apply(this, [ oldElementAppend ].append(Array.from(arguments)));
+            };
+
+            globalObject.HTMLElement.prototype.focus = function focus(options)
+            {
+                if (this.isConnected)
+                {
+                    oldHTMLElementFocus.call(this, options);
+                }
+                else
+                {
+                    this.autofocus = true;
+                }
+            };
         }
     }
 }
